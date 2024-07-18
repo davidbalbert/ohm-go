@@ -25,6 +25,10 @@ func alt(exprs ...PExpr) PExpr {
 	return &Alt{exprs}
 }
 
+func opt(expr PExpr) PExpr {
+	return &Opt{expr}
+}
+
 type test struct {
 	input   string
 	matches bool
@@ -36,7 +40,7 @@ func testMatchesRule(t *testing.T, g *Grammar, rule string, tests []test) {
 	for _, test := range tests {
 		res, err := g.MatchesRule(rule, test.input)
 		if err != nil {
-			t.Errorf("unexpected error: %s", err)
+			t.Fatalf("unexpected error: %s", err)
 		}
 		if test.matches != res {
 			t.Errorf("input=\"%s\" expected=%v actual=%v", test.input, test.matches, res)
@@ -109,6 +113,36 @@ func TestSyntacticAlt(t *testing.T) {
 		{"bar", true},
 		{" foo ", true},
 		{"foobar", false},
+	}
+	testMatchesRule(t, g, "Start", tests)
+}
+
+func TestLexOpt(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": seq(lit("aa"), opt(lit("bb")), lit("cc")),
+	})
+
+	tests := []test{
+		{"aacc", true},
+		{"aabbcc", true},
+		{"aa bb cc", false},
+		{"aa cc", false},
+		{"aabcc", false},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestSyntacticOpt(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"Start": seq(lit("aa"), opt(lit("bb")), lit("cc")),
+	})
+
+	tests := []test{
+		{"aacc", true},
+		{"aabbcc", true},
+		{"aa bb cc", true},
+		{"aa cc", true},
+		{"aabcc", false},
 	}
 	testMatchesRule(t, g, "Start", tests)
 }
