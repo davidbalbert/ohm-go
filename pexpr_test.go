@@ -130,12 +130,9 @@ func TestLexAlt(t *testing.T) {
 }
 
 func TestSyntacticAlt(t *testing.T) {
-	g := Grammar{
-		super: &BuiltInRules,
-		rules: map[string]PExpr{
-			"Start": alt(lit("foo"), lit("bar")),
-		},
-	}
+	g := grammar(map[string]PExpr{
+		"Start": alt(lit("foo"), lit("bar")),
+	})
 
 	tests := []test{
 		{"foo", true},
