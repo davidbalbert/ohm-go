@@ -2,12 +2,19 @@ package ohm
 
 import "testing"
 
-// TODO: get rid of Terminal and have a sequence of chars.
-func TestTerminal(t *testing.T) {
+func literal(s string) PExpr {
+	seq := Seq{}
+	for _, r := range s {
+		seq.exprs = append(seq.exprs, &Range{r, r})
+	}
+	return &seq
+}
+
+func TestLiteral(t *testing.T) {
 	g := Grammar{
 		super: &BuiltInRules,
 		rules: map[string]PExpr{
-			"start": &Terminal{"foo"},
+			"start": literal("foo"),
 		},
 	}
 

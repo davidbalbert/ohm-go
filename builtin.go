@@ -2,7 +2,6 @@ package ohm
 
 import (
 	"fmt"
-	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -72,18 +71,6 @@ func (*Any) Eval(m *MatchState) (bool, error) {
 
 	m.pos += size
 	return true, nil
-}
-
-type Terminal struct {
-	s string
-}
-
-func (t *Terminal) Eval(m *MatchState) (bool, error) {
-	if strings.HasPrefix(m.input[m.pos:], t.s) {
-		m.pos += len(t.s)
-		return true, nil
-	}
-	return false, nil
 }
 
 type Param struct {
