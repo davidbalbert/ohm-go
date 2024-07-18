@@ -2,8 +2,8 @@ package ohm
 
 import "testing"
 
-func grammar(rules map[string]PExpr) Grammar {
-	return Grammar{
+func grammar(rules map[string]PExpr) *Grammar {
+	return &Grammar{
 		super: &BuiltInRules,
 		rules: rules,
 	}
@@ -30,6 +30,20 @@ type test struct {
 	matches bool
 }
 
+func testMatchesRule(t *testing.T, g *Grammar, rule string, tests []test) {
+	t.Helper()
+
+	for _, test := range tests {
+		res, err := g.MatchesRule(rule, test.input)
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		if test.matches != res {
+			t.Errorf("input=\"%s\" expected=%v actual=%v", test.input, test.matches, res)
+		}
+	}
+}
+
 func TestLiteral(t *testing.T) {
 	g := grammar(map[string]PExpr{
 		"start": lit("foo"),
@@ -40,18 +54,7 @@ func TestLiteral(t *testing.T) {
 		{"fooo", false},
 		{"fo", false},
 	}
-
-	for _, test := range tests {
-		res, err := g.MatchesRule("start", test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if test.matches && !res {
-			t.Errorf("\"%s\" should succeed", test.input)
-		} else if !test.matches && res {
-			t.Errorf("\"%s\" should fail", test.input)
-		}
-	}
+	testMatchesRule(t, g, "start", tests)
 }
 
 func TestLexSeq(t *testing.T) {
@@ -65,18 +68,7 @@ func TestLexSeq(t *testing.T) {
 		{"fooba", false},
 		{"foobarr", false},
 	}
-
-	for _, test := range tests {
-		res, err := g.MatchesRule("start", test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if test.matches && !res {
-			t.Errorf("\"%s\" should succeed", test.input)
-		} else if !test.matches && res {
-			t.Errorf("\"%s\" should fail", test.input)
-		}
-	}
+	testMatchesRule(t, g, "start", tests)
 }
 
 func TestSyntacticSeq(t *testing.T) {
@@ -90,18 +82,7 @@ func TestSyntacticSeq(t *testing.T) {
 		{"fooba", false},
 		{"foobarr", false},
 	}
-
-	for _, test := range tests {
-		res, err := g.MatchesRule("Start", test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if test.matches && !res {
-			t.Errorf("\"%s\" should succeed", test.input)
-		} else if !test.matches && res {
-			t.Errorf("\"%s\" should fail", test.input)
-		}
-	}
+	testMatchesRule(t, g, "Start", tests)
 }
 
 func TestLexAlt(t *testing.T) {
@@ -115,18 +96,7 @@ func TestLexAlt(t *testing.T) {
 		{" foo ", false},
 		{"foobar", false},
 	}
-
-	for _, test := range tests {
-		res, err := g.MatchesRule("start", test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if test.matches && !res {
-			t.Errorf("\"%s\" should succeed", test.input)
-		} else if !test.matches && res {
-			t.Errorf("\"%s\" should fail", test.input)
-		}
-	}
+	testMatchesRule(t, g, "start", tests)
 }
 
 func TestSyntacticAlt(t *testing.T) {
@@ -140,16 +110,5 @@ func TestSyntacticAlt(t *testing.T) {
 		{" foo ", true},
 		{"foobar", false},
 	}
-
-	for _, test := range tests {
-		res, err := g.MatchesRule("Start", test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if test.matches && !res {
-			t.Errorf("\"%s\" should succeed", test.input)
-		} else if !test.matches && res {
-			t.Errorf("\"%s\" should fail", test.input)
-		}
-	}
+	testMatchesRule(t, g, "Start", tests)
 }
