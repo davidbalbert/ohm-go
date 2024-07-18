@@ -27,8 +27,9 @@ func (g *Grammar) MatchesRule(name, input string) (bool, error) {
 }
 
 type call struct {
-	app *Apply
-	pos int
+	app     *Apply
+	pos     int
+	lexical bool
 }
 
 type MatchState struct {
@@ -38,8 +39,14 @@ type MatchState struct {
 	stack []call
 }
 
+var spaces Apply = Apply{name: "spaces"}
+
 func (m *MatchState) eval(expr PExpr) (bool, error) {
 	pos := m.pos
+
+	if !m.stack[len(m.stack)-1].lexical && expr != &spaces {
+		m.eval(&spaces)
+	}
 
 	res, err := expr.Eval(m)
 	if err != nil {
@@ -222,7 +229,12 @@ type Apply struct {
 }
 
 func (a *Apply) Eval(m *MatchState) (bool, error) {
-	m.stack = append(m.stack, call{app: a, pos: m.pos})
+	r, _ := utf8.DecodeRuneInString(a.name)
+	if r == utf8.RuneError {
+		return false, fmt.Errorf("invalid rule name \"%s\"", a.name)
+	}
+
+	m.stack = append(m.stack, call{app: a, pos: m.pos, lexical: unicode.IsLower(r)})
 	defer func() {
 		m.stack = m.stack[:len(m.stack)-1]
 	}()

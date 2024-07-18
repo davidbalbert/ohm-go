@@ -10,6 +10,10 @@ func lit(s string) PExpr {
 	return &seq
 }
 
+func seq(exprs ...PExpr) PExpr {
+	return &Seq{exprs}
+}
+
 type test struct {
 	input   string
 	matches bool
@@ -31,6 +35,62 @@ func TestLiteral(t *testing.T) {
 
 	for _, test := range tests {
 		res, err := g.MatchesRule("start", test.input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if test.matches && !res {
+			t.Errorf("\"%s\" should succeed", test.input)
+		} else if !test.matches && res {
+			t.Errorf("\"%s\" should fail", test.input)
+		}
+	}
+}
+
+func TestLexSequence(t *testing.T) {
+	g := Grammar{
+		super: &BuiltInRules,
+		rules: map[string]PExpr{
+			"start": seq(lit("foo"), lit("bar")),
+		},
+	}
+
+	tests := []test{
+		{"foobar", true},
+		{"foo bar", false},
+		{"fooba", false},
+		{"foobarr", false},
+	}
+
+	for _, test := range tests {
+		res, err := g.MatchesRule("start", test.input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if test.matches && !res {
+			t.Errorf("\"%s\" should succeed", test.input)
+		} else if !test.matches && res {
+			t.Errorf("\"%s\" should fail", test.input)
+		}
+	}
+}
+
+func TestSemanticSequence(t *testing.T) {
+	g := Grammar{
+		super: &BuiltInRules,
+		rules: map[string]PExpr{
+			"Start": seq(lit("foo"), lit("bar")),
+		},
+	}
+
+	tests := []test{
+		{"foobar", true},
+		{"foo bar", true},
+		{"fooba", false},
+		{"foobarr", false},
+	}
+
+	for _, test := range tests {
+		res, err := g.MatchesRule("Start", test.input)
 		if err != nil {
 			t.Fatal(err)
 		}
