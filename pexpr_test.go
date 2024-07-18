@@ -146,3 +146,16 @@ func TestSyntacticOpt(t *testing.T) {
 	}
 	testMatchesRule(t, g, "Start", tests)
 }
+
+func TestAny(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": &Any{},
+	})
+
+	tests := []test{
+		{"a", true},
+		{"", false},
+		{"ab", false}, // matching adds an implicit "end"
+	}
+	testMatchesRule(t, g, "start", tests)
+}
