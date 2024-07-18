@@ -2,74 +2,121 @@ package ohm
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
-type Grammar interface {
-	Super() Grammar
-	Rule(name string) PExpr
+type Grammar struct {
+	super *Grammar
+	rules map[string]PExpr
+}
+
+func (g *Grammar) MatchesRule(name, input string) (bool, error) {
+	// TODO: allow matching rules with args
+	body := &Seq{[]PExpr{&Apply{name: name}, &Apply{name: "end"}}}
+	root := call{}
+
+	state := &MatchState{
+		g:     g,
+		input: input,
+		pos:   0,
+		stack: []call{root},
+	}
+
+	return state.eval(body)
+}
+
+type call struct {
+	app *Apply
+	pos int
 }
 
 type MatchState struct {
-	g     Grammar
+	g     *Grammar
 	input string
 	pos   int
-	err   error
+	stack []call
 }
 
-func (m *MatchState) apply(name string) bool {
-	g := m.g
-	for g != nil {
-		expr := g.Rule(name)
-		if expr != nil {
-			return expr.Eval(m)
-		}
+func (m *MatchState) eval(expr PExpr) (bool, error) {
+	pos := m.pos
 
-		g = g.Super()
+	res, err := expr.Eval(m)
+	if err != nil {
+		return false, err
 	}
 
-	m.err = fmt.Errorf("rule '%s' not found", name)
-	return false
+	if !res {
+		m.pos = pos
+		return false, nil
+	}
+	return true, nil
 }
 
 type PExpr interface {
-	Eval(m *MatchState) bool
+	Eval(m *MatchState) (bool, error)
 }
 
 type Any struct{}
 
-func (*Any) Eval(m *MatchState) bool {
+func (*Any) Eval(m *MatchState) (bool, error) {
+	if m.pos >= len(m.input) {
+		return false, nil
+	}
+
 	r, size := utf8.DecodeRuneInString(m.input[m.pos:])
 	if r == utf8.RuneError {
-		m.err = fmt.Errorf("invalid rune at pos %d", m.pos)
-		return false
+		return false, fmt.Errorf("invalid rune at pos %d", m.pos)
 	}
 
 	m.pos += size
-	return true
+	return true, nil
+}
+
+type Terminal struct {
+	s string
+}
+
+func (t *Terminal) Eval(m *MatchState) (bool, error) {
+	if strings.HasPrefix(m.input[m.pos:], t.s) {
+		m.pos += len(t.s)
+		return true, nil
+	}
+	return false, nil
+}
+
+type Param struct {
+	idx int
+}
+
+func (p *Param) Eval(m *MatchState) (bool, error) {
+	call := m.stack[len(m.stack)-1]
+	return m.eval(call.app.args[p.idx])
 }
 
 type Chars struct {
 	runes []rune
 }
 
-func (c *Chars) Eval(m *MatchState) bool {
+func (c *Chars) Eval(m *MatchState) (bool, error) {
+	if m.pos >= len(m.input) {
+		return false, nil
+	}
+
 	r, size := utf8.DecodeRuneInString(m.input[m.pos:])
 	if r == utf8.RuneError {
-		m.err = fmt.Errorf("invalid rune at pos %d", m.pos)
-		return false
+		return false, fmt.Errorf("invalid rune at pos %d", m.pos)
 	}
 
 	for _, rune := range c.runes {
 		if r == rune {
 			m.pos += size
-			return true
+			return true, nil
 		}
 	}
 
-	m.err = fmt.Errorf("expected one of '%s', got '%c'", c.runes, r)
-	return false
+	return false, nil
 }
 
 type Range struct {
@@ -77,124 +124,160 @@ type Range struct {
 	end   rune
 }
 
-func (r *Range) Eval(m *MatchState) bool {
+func (r *Range) Eval(m *MatchState) (bool, error) {
+	if m.pos >= len(m.input) {
+		return false, nil
+	}
+
 	actual, size := utf8.DecodeRuneInString(m.input[m.pos:])
 	if actual == utf8.RuneError {
-		m.err = fmt.Errorf("invalid rune at pos %d", m.pos)
-		return false
+		return false, fmt.Errorf("invalid rune at pos %d", m.pos)
 	}
 
 	if actual < r.start || actual > r.end {
-		m.err = fmt.Errorf("expected '%c'..'%c', got '%c'", r.start, r.end, actual)
-		return false
+		return false, nil
 	}
 
 	m.pos += size
-	return true
+	return true, nil
 }
 
 type Alt struct {
 	exprs []PExpr
 }
 
-func (a *Alt) Eval(m *MatchState) bool {
+func (a *Alt) Eval(m *MatchState) (bool, error) {
 	for _, expr := range a.exprs {
-		pos := m.pos
-		if expr.Eval(m) {
-			return true
+		res, err := m.eval(expr)
+		if err != nil {
+			return false, err
 		}
-
-		m.pos = pos
+		if res {
+			return true, nil
+		}
 	}
 
-	return false
+	return false, nil
 }
 
 type Seq struct {
 	exprs []PExpr
 }
 
-func (s *Seq) Eval(m *MatchState) bool {
+func (s *Seq) Eval(m *MatchState) (bool, error) {
 	for _, expr := range s.exprs {
-		if !expr.Eval(m) {
-			return false
+		res, err := m.eval(expr)
+		if err != nil {
+			return false, err
+		}
+		if !res {
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 type Opt struct {
 	expr PExpr
 }
 
-func (o *Opt) Eval(m *MatchState) bool {
-	o.expr.Eval(m)
-	return true
+func (o *Opt) Eval(m *MatchState) (bool, error) {
+	_, err := m.eval(o.expr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 type Star struct {
 	expr PExpr
 }
 
-func (s *Star) Eval(m *MatchState) bool {
-	for s.expr.Eval(m) {
+func (s *Star) Eval(m *MatchState) (bool, error) {
+	for {
+		res, err := m.eval(s.expr)
+		if err != nil {
+			return false, err
+		}
+		if !res {
+			break
+		}
 	}
-
-	return true
+	return true, nil
 }
 
 type Plus struct {
 	expr PExpr
 }
 
-func (p *Plus) Eval(m *MatchState) bool {
-	if !p.expr.Eval(m) {
-		return false
+func (p *Plus) Eval(m *MatchState) (bool, error) {
+	res, err := m.eval(p.expr)
+	if err != nil || !res {
+		return res, err
 	}
 
-	for p.expr.Eval(m) {
+	for {
+		res, err := m.eval(p.expr)
+		if err != nil {
+			return false, err
+		}
+		if !res {
+			break
+		}
 	}
-
-	return true
+	return true, nil
 }
 
 type Apply struct {
 	name string
+	args []PExpr
 }
 
-func (a *Apply) Eval(m *MatchState) bool {
-	return m.apply(a.name)
+func (a *Apply) Eval(m *MatchState) (bool, error) {
+	m.stack = append(m.stack, call{app: a, pos: m.pos})
+	defer func() {
+		m.stack = m.stack[:len(m.stack)-1]
+	}()
+
+	g := m.g
+	for g != nil {
+		expr := g.rules[a.name]
+		if expr != nil {
+			return m.eval(expr)
+		}
+
+		g = g.super
+	}
+	return false, fmt.Errorf("unknown rule \"%s\"", a.name)
 }
 
 type Lookahead struct {
 	expr PExpr
 }
 
-func (l *Lookahead) Eval(m *MatchState) bool {
+func (l *Lookahead) Eval(m *MatchState) (bool, error) {
 	pos := m.pos
 	defer func() { m.pos = pos }()
-	return l.expr.Eval(m)
+	return m.eval(l.expr)
 }
 
 type Not struct {
 	expr PExpr
 }
 
-func (n *Not) Eval(m *MatchState) bool {
+func (n *Not) Eval(m *MatchState) (bool, error) {
 	pos := m.pos
-	if n.expr.Eval(m) {
-		m.pos = pos
-		return false
+	defer func() { m.pos = pos }()
+	res, err := m.eval(n.expr)
+	if err != nil {
+		return false, err
 	}
-
-	return true
+	return !res, nil
 }
 
 type ucType int
 
-// Special case lower and upper case so we can use Go's IsLower and IsUpper functions
-// which have optimizations for ASCII.
 const (
 	ucTypeLower ucType = iota
 	ucTypeUpper
@@ -207,33 +290,35 @@ type UnicodeCategories struct {
 	names  []string
 }
 
-func (c *UnicodeCategories) Eval(m *MatchState) bool {
-	r, size := utf8.DecodeRuneInString(m.input[m.pos:])
-	if r == utf8.RuneError {
-		m.err = fmt.Errorf("invalid rune at pos %d", m.pos)
-		return false
+func (c *UnicodeCategories) Eval(m *MatchState) (bool, error) {
+	if m.pos >= len(m.input) {
+		return false, nil
 	}
 
+	r, size := utf8.DecodeRuneInString(m.input[m.pos:])
+	if r == utf8.RuneError {
+		return false, fmt.Errorf("invalid rune at pos %d", m.pos)
+	}
+
+	// Special case lower and upper so we can use Go's IsLower and IsUpper functions
+	// which have optimizations for ASCII.
 	switch c.kind {
 	case ucTypeLower:
 		if !unicode.IsLower(r) {
-			m.err = fmt.Errorf("expected lower-case letter, got '%c'", r)
-			return false
+			return false, nil
 		}
 	case ucTypeUpper:
 		if !unicode.IsUpper(r) {
-			m.err = fmt.Errorf("expected upper-case letter, got '%c'", r)
-			return false
+			return false, nil
 		}
 	case ucTypeRanges:
 		if !unicode.In(r, c.ranges...) {
-			m.err = fmt.Errorf("expected character in %v, got '%c'", c.names, r)
-			return false
+			return false, nil
 		}
 	}
 
 	m.pos += size
-	return true
+	return true, nil
 }
 
 var lower UnicodeCategories = UnicodeCategories{kind: ucTypeLower}
@@ -244,80 +329,27 @@ var ltmo UnicodeCategories = UnicodeCategories{
 	names:  []string{"Lt", "Lm", "Lo"},
 }
 
-type PrimitiveRules struct{}
-
-func (*PrimitiveRules) Super() Grammar {
-	return nil
-}
-
-func (*PrimitiveRules) Rule(name string) PExpr {
-	switch name {
-	case "any":
-		return &Any{}
-	case "lower":
-		return &lower
-	case "upper":
-		return &upper
-	case "unicodeLtmo":
-		return &ltmo
-	}
-
-	return nil
+var primitiveRules Grammar = Grammar{
+	super: nil,
+	rules: map[string]PExpr{
+		"any":         &Any{},
+		"lower":       &lower,
+		"upper":       &upper,
+		"unicodeLtmo": &ltmo,
+	},
 }
 
 // This will be generated from built-in-rules.ohm
 
-type BuiltInRules struct{}
-
-func (*BuiltInRules) Super() Grammar {
-	return &PrimitiveRules{}
-}
-
-func (g *BuiltInRules) Rule(name string) PExpr {
-	switch name {
-	case "alnum":
-		return g.rule_alnum()
-	case "letter":
-		return g.rule_letter()
-	case "digit":
-		return g.rule_digit()
-	case "hexDigit":
-		return g.rule_hexDigit()
-	case "end":
-		return g.rule_end()
-	case "spaces":
-		return g.rule_spaces()
-	case "space":
-		return g.rule_space()
-	}
-
-	return nil
-}
-
-func (*BuiltInRules) rule_alnum() PExpr {
-	return &Alt{[]PExpr{&Apply{"letter"}, &Apply{"digit"}}}
-}
-
-func (*BuiltInRules) rule_letter() PExpr {
-	return &Alt{[]PExpr{&Apply{"lower"}, &Apply{"upper"}, &Apply{"unicodeLtmo"}}}
-}
-
-func (*BuiltInRules) rule_digit() PExpr {
-	return &Alt{[]PExpr{&Range{'0', '9'}}}
-}
-
-func (*BuiltInRules) rule_hexDigit() PExpr {
-	return &Alt{[]PExpr{&Apply{"digit"}, &Range{'a', 'f'}, &Range{'A', 'F'}}}
-}
-
-func (*BuiltInRules) rule_end() PExpr {
-	return &Not{&Any{}}
-}
-
-func (*BuiltInRules) rule_spaces() PExpr {
-	return &Star{&Apply{"space"}}
-}
-
-func (*BuiltInRules) rule_space() PExpr {
-	return &Chars{[]rune(" \t\n\r")}
+var BuiltInRules Grammar = Grammar{
+	super: &primitiveRules,
+	rules: map[string]PExpr{
+		"alnum":    &Alt{[]PExpr{&Apply{name: "letter"}, &Apply{name: "digit"}}},
+		"letter":   &Alt{[]PExpr{&Apply{name: "lower"}, &Apply{name: "upper"}, &Apply{name: "unicodeLtmo"}}},
+		"digit":    &Range{'0', '9'},
+		"hexDigit": &Alt{[]PExpr{&Apply{name: "digit"}, &Range{'a', 'f'}, &Range{'A', 'F'}}},
+		"end":      &Not{&Any{}},
+		"spaces":   &Star{&Apply{name: "space"}},
+		"space":    &Chars{[]rune(" \t\n\r")},
+	},
 }
