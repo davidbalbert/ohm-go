@@ -13,8 +13,14 @@ type Grammar struct {
 
 func (g *Grammar) MatchesRule(name, input string) (bool, error) {
 	// TODO: allow matching rules with args
+	a := Apply{name: name}
+	islex, err := a.isLexical()
+	if err != nil {
+		return false, err
+	}
+
 	body := &Seq{[]PExpr{&Apply{name: name}, &Apply{name: "end"}}}
-	root := call{}
+	root := call{lexical: islex}
 
 	state := &MatchState{
 		g:     g,
@@ -229,12 +235,12 @@ type Apply struct {
 }
 
 func (a *Apply) Eval(m *MatchState) (bool, error) {
-	r, _ := utf8.DecodeRuneInString(a.name)
-	if r == utf8.RuneError {
-		return false, fmt.Errorf("invalid rule name \"%s\"", a.name)
+	islex, err := a.isLexical()
+	if err != nil {
+		return false, err
 	}
+	m.stack = append(m.stack, call{app: a, pos: m.pos, lexical: islex})
 
-	m.stack = append(m.stack, call{app: a, pos: m.pos, lexical: unicode.IsLower(r)})
 	defer func() {
 		m.stack = m.stack[:len(m.stack)-1]
 	}()
@@ -249,6 +255,15 @@ func (a *Apply) Eval(m *MatchState) (bool, error) {
 		g = g.super
 	}
 	return false, fmt.Errorf("unknown rule \"%s\"", a.name)
+}
+
+func (a *Apply) isLexical() (bool, error) {
+	r, _ := utf8.DecodeRuneInString(a.name)
+	if r == utf8.RuneError {
+		return false, fmt.Errorf("invalid rule name \"%s\"", a.name)
+	}
+
+	return unicode.IsLower(r), nil
 }
 
 type Lookahead struct {

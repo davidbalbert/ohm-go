@@ -2,6 +2,13 @@ package ohm
 
 import "testing"
 
+func grammar(rules map[string]PExpr) Grammar {
+	return Grammar{
+		super: &BuiltInRules,
+		rules: rules,
+	}
+}
+
 func lit(s string) PExpr {
 	seq := Seq{}
 	for _, r := range s {
@@ -24,12 +31,9 @@ type test struct {
 }
 
 func TestLiteral(t *testing.T) {
-	g := Grammar{
-		super: &BuiltInRules,
-		rules: map[string]PExpr{
-			"start": lit("foo"),
-		},
-	}
+	g := grammar(map[string]PExpr{
+		"start": lit("foo"),
+	})
 
 	tests := []test{
 		{"foo", true},
@@ -51,12 +55,9 @@ func TestLiteral(t *testing.T) {
 }
 
 func TestLexSeq(t *testing.T) {
-	g := Grammar{
-		super: &BuiltInRules,
-		rules: map[string]PExpr{
-			"start": seq(lit("foo"), lit("bar")),
-		},
-	}
+	g := grammar(map[string]PExpr{
+		"start": seq(lit("foo"), lit("bar")),
+	})
 
 	tests := []test{
 		{"foobar", true},
@@ -79,12 +80,9 @@ func TestLexSeq(t *testing.T) {
 }
 
 func TestSyntacticSeq(t *testing.T) {
-	g := Grammar{
-		super: &BuiltInRules,
-		rules: map[string]PExpr{
-			"Start": seq(lit("foo"), lit("bar")),
-		},
-	}
+	g := grammar(map[string]PExpr{
+		"Start": seq(lit("foo"), lit("bar")),
+	})
 
 	tests := []test{
 		{"foobar", true},
@@ -107,12 +105,9 @@ func TestSyntacticSeq(t *testing.T) {
 }
 
 func TestLexAlt(t *testing.T) {
-	g := Grammar{
-		super: &BuiltInRules,
-		rules: map[string]PExpr{
-			"start": alt(lit("foo"), lit("bar")),
-		},
-	}
+	g := grammar(map[string]PExpr{
+		"start": alt(lit("foo"), lit("bar")),
+	})
 
 	tests := []test{
 		{"foo", true},
@@ -122,7 +117,7 @@ func TestLexAlt(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res, err := g.MatchesRule("Start", test.input)
+		res, err := g.MatchesRule("start", test.input)
 		if err != nil {
 			t.Fatal(err)
 		}
