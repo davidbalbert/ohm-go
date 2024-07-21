@@ -95,6 +95,27 @@ func (p *Param) Eval(m *MatchState) (bool, error) {
 	return m.eval(call.app.args[p.idx])
 }
 
+type Char struct {
+	r rune
+}
+
+func (c *Char) Eval(m *MatchState) (bool, error) {
+	if m.pos >= len(m.input) {
+		return false, nil
+	}
+
+	r, size := utf8.DecodeRuneInString(m.input[m.pos:])
+	if r == utf8.RuneError {
+		return false, fmt.Errorf("invalid rune at pos %d", m.pos)
+	}
+
+	if r != c.r {
+		return false, nil
+	}
+	m.pos += size
+	return true, nil
+}
+
 type Chars struct {
 	runes []rune
 }

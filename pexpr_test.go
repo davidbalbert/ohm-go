@@ -12,7 +12,7 @@ func grammar(rules map[string]PExpr) *Grammar {
 func lit(s string) PExpr {
 	seq := Seq{}
 	for _, r := range s {
-		seq.exprs = append(seq.exprs, &Range{r, r})
+		seq.exprs = append(seq.exprs, &Char{r})
 	}
 	return &seq
 }
@@ -27,6 +27,14 @@ func alt(exprs ...PExpr) PExpr {
 
 func opt(expr PExpr) PExpr {
 	return &Opt{expr}
+}
+
+func apply(name string, args ...PExpr) PExpr {
+	return &Apply{name, args}
+}
+
+func chars(rs ...rune) PExpr {
+	return &Chars{rs}
 }
 
 type test struct {
@@ -159,3 +167,123 @@ func TestAny(t *testing.T) {
 	}
 	testMatchesRule(t, g, "start", tests)
 }
+
+func TestRange(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": &Range{'b', 'd'},
+	})
+
+	tests := []test{
+		{"a", false},
+		{"b", true},
+		{"c", true},
+		{"d", true},
+		{"e", false},
+		{"bb", false},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestChars(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": chars('a', 'c', 'e'),
+	})
+
+	tests := []test{
+		{"a", true},
+		{"b", false},
+		{"c", true},
+		{"d", false},
+		{"e", true},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestApply(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"Start": seq(apply("foo"), lit("bar")),
+		"foo":   lit("foo"),
+	})
+
+	tests := []test{
+		{"foobar", true},
+		{"foo bar", true},
+		{"fooba", false},
+		{"foobarr", false},
+	}
+	testMatchesRule(t, g, "Start", tests)
+}
+
+func TestLookahead(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": seq(&Lookahead{lit("fo")}, lit("foo")),
+	})
+
+	tests := []test{
+		{"fo", false},
+		{"foo", true},
+		{"fooo", false},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestNot(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"while": seq(lit("while"), &Not{&Range{'a', 'z'}}),
+	})
+
+	tests := []test{
+		{"while", true},
+		{"while1", false},
+		{"whilea", false},
+		{"whil", false},
+	}
+	testMatchesRule(t, g, "while", tests)
+}
+
+func TestStar(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": seq(&Star{lit("a")}, lit("b")),
+	})
+
+	tests := []test{
+		{"b", true},
+		{"ab", true},
+		{"aab", true},
+		{"aaab", true},
+		{"aaaab", true},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestPlus(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": seq(&Plus{lit("a")}, lit("b")),
+	})
+
+	tests := []test{
+		{"b", false},
+		{"ab", true},
+		{"aab", true},
+		{"aaab", true},
+		{"aaaab", true},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestOpt(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"start": seq(&Opt{lit("a")}, lit("b")),
+	})
+
+	tests := []test{
+		{"b", true},
+		{"ab", true},
+		{"aab", false},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+// TODO:
+// - Param
+// - left recursion
