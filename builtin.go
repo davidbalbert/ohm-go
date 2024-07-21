@@ -518,3 +518,278 @@ var BuiltInRules Grammar = Grammar{
 		"space":  &Chars{[]rune(" \t\n\r")},
 	},
 }
+
+// This will be gereated from ohm-grammar.ohm
+
+var OhmGrammar Grammar = Grammar{
+	super: &BuiltInRules,
+	rules: map[string]PExpr{
+		"Grammars": &Star{&Apply{name: "Grammar"}},
+		"Grammar": &Seq{[]PExpr{
+			&Apply{name: "ident"},
+			&Maybe{&Apply{name: "SuperGrammar"}},
+			&Char{'{'},
+			&Star{&Apply{name: "Rule"}},
+			&Char{'"'},
+		}},
+		"SuperGrammar": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'<'}, &Char{':'}}},
+			&Apply{name: "ident"},
+		}},
+		"Rule": &Alt{[]PExpr{
+			&Apply{name: "Rule_define"},
+			&Apply{name: "Rule_override"},
+			&Apply{name: "Rule_extend"},
+		}},
+		"Rule_define": &Seq{[]PExpr{
+			&Apply{name: "ident"},
+			&Maybe{&Apply{name: "Formals"}},
+			&Maybe{&Apply{name: "ruleDescr"}},
+			&Char{'='},
+			&Apply{name: "RuleBody"},
+		}},
+		"Rule_override": &Seq{[]PExpr{
+			&Apply{name: "ident"},
+			&Maybe{&Apply{name: "Formals"}},
+			&Seq{[]PExpr{&Char{':'}, &Char{'='}}},
+			&Apply{name: "OverrideRuleBody"},
+		}},
+		"Rule_extend": &Seq{[]PExpr{
+			&Apply{name: "ident"},
+			&Maybe{&Apply{name: "Formals"}},
+			&Seq{[]PExpr{&Char{'+'}, &Char{'='}}},
+			&Apply{name: "RuleBody"},
+		}},
+		"RuleBody": &Seq{[]PExpr{
+			&Maybe{&Char{'|'}},
+			&Apply{name: "NonemptyListOf", args: []PExpr{&Apply{name: "TopLevelTerm"}, &Char{'|'}}},
+		}},
+		"TopLevelTerm": &Alt{[]PExpr{
+			&Apply{name: "TopLevelTerm_inline"},
+			&Apply{name: "Seq"},
+		}},
+		"TopLevelTerm_inline": &Seq{[]PExpr{
+			&Apply{name: "Seq"},
+			&Apply{name: "caseName"},
+		}},
+		"OverrideRuleBody": &Seq{[]PExpr{
+			&Maybe{&Char{'|'}},
+			&Apply{name: "NonemptyListOf", args: []PExpr{&Apply{name: "OverrideTopLevelTerm"}, &Char{'|'}}},
+		}},
+		"OverrideTopLevelTerm": &Alt{[]PExpr{
+			&Apply{name: "OverrideTopLevelTerm_superSplice"},
+			&Apply{name: "TopLevelTerm"},
+		}},
+		"OverrideTopLevelTerm_superSplice": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'.'}, &Char{'.'}, &Char{'.'}}},
+		}},
+		"Formals": &Seq{[]PExpr{
+			&Char{'<'},
+			&Apply{name: "ListOf", args: []PExpr{&Apply{name: "ident"}, &Char{','}}},
+			&Char{'>'},
+		}},
+		"Params": &Seq{[]PExpr{
+			&Char{'<'},
+			&Apply{name: "ListOf", args: []PExpr{&Apply{name: "Seq"}, &Char{','}}},
+			&Char{'>'},
+		}},
+		"Alt": &Apply{name: "NonemptyListOf", args: []PExpr{&Apply{name: "Seq"}, &Char{'|'}}},
+		"Seq": &Apply{name: "Star", args: []PExpr{&Apply{name: "Iter"}}},
+		"Iter": &Alt{[]PExpr{
+			&Apply{name: "Iter_star"},
+			&Apply{name: "Iter_plus"},
+			&Apply{name: "Iter_opt"},
+			&Apply{name: "Pred"},
+		}},
+		"Iter_star": &Seq{[]PExpr{
+			&Apply{name: "Pred"},
+			&Char{'*'},
+		}},
+		"Iter_plus": &Seq{[]PExpr{
+			&Apply{name: "Pred"},
+			&Char{'+'},
+		}},
+		"Iter_opt": &Seq{[]PExpr{
+			&Apply{name: "Pred"},
+			&Char{'?'},
+		}},
+		"Pred": &Alt{[]PExpr{
+			&Apply{name: "Pred_not"},
+			&Apply{name: "Pred_lookahead"},
+			&Apply{name: "Lex"},
+		}},
+		"Pred_not": &Seq{[]PExpr{
+			&Char{'~'},
+			&Apply{name: "Lex"},
+		}},
+		"Pred_lookahead": &Seq{[]PExpr{
+			&Char{'&'},
+			&Apply{name: "Lex"},
+		}},
+		"Lex": &Alt{[]PExpr{
+			&Apply{name: "Lex_lex"},
+			&Apply{name: "Base"},
+		}},
+		"Lex_lex": &Seq{[]PExpr{
+			&Char{'#'},
+			&Apply{name: "Base"},
+		}},
+		"Base": &Alt{[]PExpr{
+			&Apply{name: "Base_application"},
+			&Apply{name: "Base_range"},
+			&Apply{name: "Base_terminal"},
+			&Apply{name: "Base_paren"},
+		}},
+		"Base_application": &Seq{[]PExpr{
+			&Apply{name: "ident"},
+			&Maybe{&Apply{name: "Params"}},
+			&Not{&Alt{[]PExpr{
+				&Seq{[]PExpr{&Maybe{&Apply{name: "ruleDescr"}}, &Char{'='}}},
+				&Seq{[]PExpr{&Char{':'}, &Char{'='}}},
+				&Seq{[]PExpr{&Char{'+'}, &Char{'='}}},
+			}}},
+		}},
+		"Base_range": &Seq{[]PExpr{
+			&Apply{name: "oneCharTerminal"},
+			&Seq{[]PExpr{&Char{'.'}, &Char{'.'}}},
+			&Apply{name: "oneCharTerminal"},
+		}},
+		"Base_terminal": &Apply{name: "terminal"},
+		"Base_paren": &Seq{[]PExpr{
+			&Char{'('},
+			&Apply{name: "Alt"},
+			&Char{')'},
+		}},
+		"ruleDescr": &Seq{[]PExpr{
+			&Char{'('},
+			&Apply{name: "ruleDescrText"},
+			&Char{')'},
+		}},
+		"ruleDescrText": &Star{&Seq{[]PExpr{
+			&Not{&Char{')'}},
+			&Apply{name: "any"},
+		}}},
+		"caseName": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'-'}, &Char{'-'}}},
+			&Star{&Seq{[]PExpr{&Not{&Char{'\n'}}, &Apply{name: "space"}}}},
+			&Star{&Apply{name: "name"}},
+			&Star{&Seq{[]PExpr{&Char{'\n'}, &Apply{name: "space"}}}},
+			&Alt{[]PExpr{&Char{'\n'}, &Lookahead{&Char{'}'}}}},
+		}},
+		"name": &Seq{[]PExpr{
+			&Apply{name: "nameFirst"},
+			&Star{&Apply{name: "nameRest"}},
+		}},
+		"nameFirst": &Alt{[]PExpr{
+			&Char{'_'},
+			&Apply{name: "letter"},
+		}},
+		"nameRest": &Alt{[]PExpr{
+			&Char{'_'},
+			&Apply{name: "alnum"},
+		}},
+		"ident": &Apply{name: "name"},
+		"terminal": &Seq{[]PExpr{
+			&Char{'"'},
+			&Star{&Apply{name: "terminalChar"}},
+			&Char{'"'},
+		}},
+		"oneCharTerminal": &Seq{[]PExpr{
+			&Char{'"'},
+			&Apply{name: "terminalChar"},
+			&Char{'"'},
+		}},
+		"terminalChar": &Alt{[]PExpr{
+			&Apply{name: "escapeChar"},
+			&Seq{[]PExpr{
+				&Not{&Char{'\\'}},
+				&Not{&Char{'"'}},
+				&Not{&Char{'\n'}},
+				&Range{'\u0000', '\U0010FFFF'},
+			}},
+		}},
+		"escapeChar": &Alt{[]PExpr{
+			&Apply{name: "escapeChar_backslash"},
+			&Apply{name: "escapeChar_doubleQuote"},
+			&Apply{name: "escapeChar_singleQuote"},
+			&Apply{name: "escapeChar_backspace"},
+			&Apply{name: "escapeChar_lineFeed"},
+			&Apply{name: "escapeChar_carriageReturn"},
+			&Apply{name: "escapeChar_tab"},
+			&Apply{name: "escapeChar_unicodeCodePoint"},
+			&Apply{name: "escapeChar_unicodeEscape"},
+			&Apply{name: "escapeChar_hexEscape"},
+		}},
+		"escapeChar_backslash":      &Seq{[]PExpr{&Char{'\\'}, &Char{'\\'}}},
+		"escapeChar_doubleQuote":    &Seq{[]PExpr{&Char{'\\'}, &Char{'"'}}},
+		"escapeChar_singleQuote":    &Seq{[]PExpr{&Char{'\\'}, &Char{'\''}}},
+		"escapeChar_backspace":      &Seq{[]PExpr{&Char{'\\'}, &Char{'b'}}},
+		"escapeChar_lineFeed":       &Seq{[]PExpr{&Char{'\\'}, &Char{'n'}}},
+		"escapeChar_carriageReturn": &Seq{[]PExpr{&Char{'\\'}, &Char{'r'}}},
+		"escapeChar_tab":            &Seq{[]PExpr{&Char{'\\'}, &Char{'t'}}},
+		"escapeChar_unicodeCodePoint": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'\\'}, &Char{'u'}, &Char{'{'}}},
+			&Apply{name: "hexDigit"},
+			&Maybe{&Apply{name: "hexDigit"}},
+			&Maybe{&Apply{name: "hexDigit"}},
+			&Maybe{&Apply{name: "hexDigit"}},
+			&Maybe{&Apply{name: "hexDigit"}},
+			&Maybe{&Apply{name: "hexDigit"}},
+			&Char{'}'},
+		}},
+		"escapeChar_unicodeEscape": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'\\'}, &Char{'u'}}},
+			&Apply{name: "hexDigit"},
+			&Apply{name: "hexDigit"},
+			&Apply{name: "hexDigit"},
+			&Apply{name: "hexDigit"},
+		}},
+		"escapeChar_hexEscape": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'\\'}, &Char{'x'}}},
+			&Apply{name: "hexDigit"},
+			&Apply{name: "hexDigit"},
+		}},
+		// // TODO: space += comment
+		"comment": &Alt{[]PExpr{
+			&Apply{name: "comment_singleLine"},
+			&Apply{name: "comment_multiLine"},
+		}},
+		"comment_singleLine": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'/'}, &Char{'/'}}},
+			&Star{&Seq{[]PExpr{&Not{&Char{'\n'}}, &Apply{name: "any"}}}},
+			&Lookahead{&Alt{[]PExpr{&Char{'\n'}, &Apply{name: "end"}}}},
+		}},
+		"comment_multiLine": &Seq{[]PExpr{
+			&Seq{[]PExpr{&Char{'/'}, &Char{'*'}}},
+			&Star{&Seq{[]PExpr{&Not{&Seq{[]PExpr{&Seq{[]PExpr{&Char{'*'}, &Char{'/'}}}, &Apply{name: "any"}}}}}}},
+			&Seq{[]PExpr{&Char{'*'}, &Char{'/'}}},
+		}},
+		"tokens": &Star{&Apply{name: "token"}},
+		"token": &Alt{[]PExpr{
+			&Apply{name: "caseName"},
+			&Apply{name: "comment"},
+			&Apply{name: "ident"},
+			&Apply{name: "operator"},
+			&Apply{name: "punctuation"},
+			&Apply{name: "terminal"},
+			&Apply{name: "any"},
+		}},
+		"operator": &Alt{[]PExpr{
+			&Seq{[]PExpr{&Char{'<'}, &Char{':'}}},
+			&Char{'='},
+			&Seq{[]PExpr{&Char{':'}, &Char{'='}}},
+			&Seq{[]PExpr{&Char{'+'}, &Char{'='}}},
+			&Char{'*'},
+			&Char{'+'},
+			&Char{'?'},
+			&Char{'~'},
+			&Char{'&'},
+		}},
+		"punctuation": &Alt{[]PExpr{
+			&Char{'<'},
+			&Char{'>'},
+			&Char{','},
+			&Seq{[]PExpr{&Char{'-'}, &Char{'-'}}},
+		}},
+	},
+}
