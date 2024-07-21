@@ -25,12 +25,16 @@ func alt(exprs ...PExpr) PExpr {
 	return &Alt{exprs}
 }
 
-func opt(expr PExpr) PExpr {
-	return &Opt{expr}
+func maybe(expr PExpr) PExpr {
+	return &Maybe{expr}
 }
 
 func apply(name string, args ...PExpr) PExpr {
 	return &Apply{name, args}
+}
+
+func param(n int) PExpr {
+	return &Param{n}
 }
 
 func chars(rs ...rune) PExpr {
@@ -127,7 +131,7 @@ func TestSyntacticAlt(t *testing.T) {
 
 func TestLexOpt(t *testing.T) {
 	g := grammar(map[string]PExpr{
-		"start": seq(lit("aa"), opt(lit("bb")), lit("cc")),
+		"start": seq(lit("aa"), maybe(lit("bb")), lit("cc")),
 	})
 
 	tests := []test{
@@ -142,7 +146,7 @@ func TestLexOpt(t *testing.T) {
 
 func TestSyntacticOpt(t *testing.T) {
 	g := grammar(map[string]PExpr{
-		"Start": seq(lit("aa"), opt(lit("bb")), lit("cc")),
+		"Start": seq(lit("aa"), maybe(lit("bb")), lit("cc")),
 	})
 
 	tests := []test{
@@ -197,21 +201,6 @@ func TestChars(t *testing.T) {
 		{"e", true},
 	}
 	testMatchesRule(t, g, "start", tests)
-}
-
-func TestApply(t *testing.T) {
-	g := grammar(map[string]PExpr{
-		"Start": seq(apply("foo"), lit("bar")),
-		"foo":   lit("foo"),
-	})
-
-	tests := []test{
-		{"foobar", true},
-		{"foo bar", true},
-		{"fooba", false},
-		{"foobarr", false},
-	}
-	testMatchesRule(t, g, "Start", tests)
 }
 
 func TestLookahead(t *testing.T) {
@@ -271,9 +260,9 @@ func TestPlus(t *testing.T) {
 	testMatchesRule(t, g, "start", tests)
 }
 
-func TestOpt(t *testing.T) {
+func TestMaybe(t *testing.T) {
 	g := grammar(map[string]PExpr{
-		"start": seq(&Opt{lit("a")}, lit("b")),
+		"start": seq(&Maybe{lit("a")}, lit("b")),
 	})
 
 	tests := []test{
@@ -282,6 +271,67 @@ func TestOpt(t *testing.T) {
 		{"aab", false},
 	}
 	testMatchesRule(t, g, "start", tests)
+}
+
+func TestApply(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"Start": seq(apply("foo"), lit("bar")),
+		"foo":   lit("foo"),
+	})
+
+	tests := []test{
+		{"foobar", true},
+		{"foo bar", true},
+		{"fooba", false},
+		{"foobarr", false},
+	}
+	testMatchesRule(t, g, "Start", tests)
+}
+
+func TestLexApplyWithArgs(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		// commaListOf<elem> = nonemptyCommaListOf<elem> | emptyCommaListOf<elem>
+		// nonemptyCommaListOf<elem> = elem ("," elem)*
+		// emptyCommaListOf<elem> = /* nothing */
+		"start":             apply("commaList", lit("a")),
+		"commaList":         alt(apply("nonemptyCommaList", param(0)), apply("emptyCommaList", param(0))),
+		"nonemptyCommaList": seq(param(0), &Star{seq(lit(","), param(0))}),
+		"emptyCommaList":    &Seq{},
+	})
+
+	tests := []test{
+		{"", true},
+		{"a", true},
+		{"a,a", true},
+		{"a,a,a", true},
+		{"a,", false},
+		{",a", false},
+		{"a,b", false},
+		{"a, a", false},
+	}
+	testMatchesRule(t, g, "start", tests)
+}
+
+func TestSyntacticApplyWithArgs(t *testing.T) {
+	g := grammar(map[string]PExpr{
+		"Start":             apply("CommaList", lit("a")),
+		"CommaList":         alt(apply("NonemptyCommaList", param(0)), apply("EmptyCommaList", param(0))),
+		"NonemptyCommaList": seq(param(0), &Star{seq(lit(","), param(0))}),
+		"EmptyCommaList":    &Seq{},
+	})
+
+	tests := []test{
+		{"", true},
+		{"a", true},
+		{"a,a", true},
+		{"a,a,a", true},
+		{"a, a", true},
+		{"a, a, a", true},
+		{"a,", false},
+		{",a", false},
+		{"a, b", false},
+	}
+	testMatchesRule(t, g, "Start", tests)
 }
 
 // TODO:

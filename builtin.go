@@ -20,7 +20,7 @@ func (g *Grammar) MatchesRule(name, input string) (bool, error) {
 	}
 
 	body := &Seq{[]PExpr{&Apply{name: name}, &Apply{name: "end"}}}
-	root := call{lexical: islex}
+	root := call{app: &Apply{}, lexical: islex}
 
 	state := &MatchState{
 		g:     g,
@@ -68,6 +68,7 @@ func (m *MatchState) eval(expr PExpr) (bool, error) {
 
 type PExpr interface {
 	Eval(m *MatchState) (bool, error)
+	substituteParams(args []PExpr) (PExpr, error)
 }
 
 type Any struct{}
@@ -86,13 +87,8 @@ func (*Any) Eval(m *MatchState) (bool, error) {
 	return true, nil
 }
 
-type Param struct {
-	idx int
-}
-
-func (p *Param) Eval(m *MatchState) (bool, error) {
-	call := m.stack[len(m.stack)-1]
-	return m.eval(call.app.args[p.idx])
+func (a *Any) substituteParams(args []PExpr) (PExpr, error) {
+	return a, nil
 }
 
 type Char struct {
@@ -114,6 +110,10 @@ func (c *Char) Eval(m *MatchState) (bool, error) {
 	}
 	m.pos += size
 	return true, nil
+}
+
+func (c *Char) substituteParams(args []PExpr) (PExpr, error) {
+	return c, nil
 }
 
 type Chars struct {
@@ -140,6 +140,10 @@ func (c *Chars) Eval(m *MatchState) (bool, error) {
 	return false, nil
 }
 
+func (c *Chars) substituteParams(args []PExpr) (PExpr, error) {
+	return c, nil
+}
+
 type Range struct {
 	start rune
 	end   rune
@@ -163,6 +167,10 @@ func (r *Range) Eval(m *MatchState) (bool, error) {
 	return true, nil
 }
 
+func (r *Range) substituteParams(args []PExpr) (PExpr, error) {
+	return r, nil
+}
+
 type Alt struct {
 	exprs []PExpr
 }
@@ -179,6 +187,18 @@ func (a *Alt) Eval(m *MatchState) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (a *Alt) substituteParams(args []PExpr) (PExpr, error) {
+	newExprs := make([]PExpr, len(a.exprs))
+	for i, expr := range a.exprs {
+		newExpr, err := expr.substituteParams(args)
+		if err != nil {
+			return nil, err
+		}
+		newExprs[i] = newExpr
+	}
+	return &Alt{newExprs}, nil
 }
 
 type Seq struct {
@@ -199,16 +219,36 @@ func (s *Seq) Eval(m *MatchState) (bool, error) {
 	return true, nil
 }
 
-type Opt struct {
+func (s *Seq) substituteParams(args []PExpr) (PExpr, error) {
+	newExprs := make([]PExpr, len(s.exprs))
+	for i, expr := range s.exprs {
+		newExpr, err := expr.substituteParams(args)
+		if err != nil {
+			return nil, err
+		}
+		newExprs[i] = newExpr
+	}
+	return &Seq{newExprs}, nil
+}
+
+type Maybe struct {
 	expr PExpr
 }
 
-func (o *Opt) Eval(m *MatchState) (bool, error) {
+func (o *Maybe) Eval(m *MatchState) (bool, error) {
 	_, err := m.eval(o.expr)
 	if err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func (o *Maybe) substituteParams(args []PExpr) (PExpr, error) {
+	newExpr, err := o.expr.substituteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	return &Maybe{newExpr}, nil
 }
 
 type Star struct {
@@ -226,6 +266,14 @@ func (s *Star) Eval(m *MatchState) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+func (s *Star) substituteParams(args []PExpr) (PExpr, error) {
+	newExpr, err := s.expr.substituteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	return &Star{newExpr}, nil
 }
 
 type Plus struct {
@@ -250,6 +298,14 @@ func (p *Plus) Eval(m *MatchState) (bool, error) {
 	return true, nil
 }
 
+func (p *Plus) substituteParams(args []PExpr) (PExpr, error) {
+	newExpr, err := p.expr.substituteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	return &Plus{newExpr}, nil
+}
+
 type Apply struct {
 	name string
 	args []PExpr
@@ -260,7 +316,14 @@ func (a *Apply) Eval(m *MatchState) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	m.stack = append(m.stack, call{app: a, pos: m.pos, lexical: islex})
+
+	caller := m.stack[len(m.stack)-1]
+	app, err := a.substituteParams(caller.app.args)
+	if err != nil {
+		return false, err
+	}
+
+	m.stack = append(m.stack, call{app: app.(*Apply), pos: m.pos, lexical: islex})
 
 	defer func() {
 		m.stack = m.stack[:len(m.stack)-1]
@@ -278,6 +341,18 @@ func (a *Apply) Eval(m *MatchState) (bool, error) {
 	return false, fmt.Errorf("unknown rule \"%s\"", a.name)
 }
 
+func (a *Apply) substituteParams(args []PExpr) (PExpr, error) {
+	newArgs := make([]PExpr, len(a.args))
+	for i, arg := range a.args {
+		newArg, err := arg.substituteParams(args)
+		if err != nil {
+			return nil, err
+		}
+		newArgs[i] = newArg
+	}
+	return &Apply{a.name, newArgs}, nil
+}
+
 func (a *Apply) isLexical() (bool, error) {
 	r, _ := utf8.DecodeRuneInString(a.name)
 	if r == utf8.RuneError {
@@ -285,6 +360,25 @@ func (a *Apply) isLexical() (bool, error) {
 	}
 
 	return unicode.IsLower(r), nil
+}
+
+type Param struct {
+	idx int
+}
+
+func (p *Param) Eval(m *MatchState) (bool, error) {
+	call := m.stack[len(m.stack)-1]
+	if p.idx >= len(call.app.args) {
+		return false, fmt.Errorf("param index out of range: %d", p.idx)
+	}
+	return m.eval(call.app.args[p.idx])
+}
+
+func (p *Param) substituteParams(args []PExpr) (PExpr, error) {
+	if p.idx >= len(args) {
+		return nil, fmt.Errorf("param index out of range: %d", p.idx)
+	}
+	return args[p.idx], nil
 }
 
 type Lookahead struct {
@@ -295,6 +389,14 @@ func (l *Lookahead) Eval(m *MatchState) (bool, error) {
 	pos := m.pos
 	defer func() { m.pos = pos }()
 	return m.eval(l.expr)
+}
+
+func (l *Lookahead) substituteParams(args []PExpr) (PExpr, error) {
+	newExpr, err := l.expr.substituteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	return &Lookahead{newExpr}, nil
 }
 
 type Not struct {
@@ -309,6 +411,14 @@ func (n *Not) Eval(m *MatchState) (bool, error) {
 		return false, err
 	}
 	return !res, nil
+}
+
+func (n *Not) substituteParams(args []PExpr) (PExpr, error) {
+	newExpr, err := n.expr.substituteParams(args)
+	if err != nil {
+		return nil, err
+	}
+	return &Not{newExpr}, nil
 }
 
 type ucType int
@@ -354,6 +464,10 @@ func (c *UnicodeCategories) Eval(m *MatchState) (bool, error) {
 
 	m.pos += size
 	return true, nil
+}
+
+func (c *UnicodeCategories) substituteParams(args []PExpr) (PExpr, error) {
+	return c, nil
 }
 
 var lower UnicodeCategories = UnicodeCategories{kind: ucTypeLower}
