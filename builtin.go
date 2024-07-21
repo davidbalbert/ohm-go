@@ -509,8 +509,12 @@ var BuiltInRules Grammar = Grammar{
 		}},
 		"nonemptyListOf": &Seq{[]PExpr{&Param{0}, &Star{&Seq{[]PExpr{&Param{1}, &Param{0}}}}}},
 		"emptyListOf":    &Seq{},
-		"end":            &Not{&Any{}},
-		"spaces":         &Star{&Apply{name: "space"}},
-		"space":          &Chars{[]rune(" \t\n\r")},
+		"applySyntactic": &Param{0},
+
+		// In Ohm-js these are hardcoded in primitiveRules, but there's no need to do that, and
+		// I like having them here.
+		"end":    &Not{&Any{}},
+		"spaces": &Star{&Apply{name: "space"}},
+		"space":  &Chars{[]rune(" \t\n\r")},
 	},
 }
