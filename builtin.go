@@ -497,8 +497,20 @@ var BuiltInRules Grammar = Grammar{
 		"letter":   &Alt{[]PExpr{&Apply{name: "lower"}, &Apply{name: "upper"}, &Apply{name: "unicodeLtmo"}}},
 		"digit":    &Range{'0', '9'},
 		"hexDigit": &Alt{[]PExpr{&Apply{name: "digit"}, &Range{'a', 'f'}, &Range{'A', 'F'}}},
-		"end":      &Not{&Any{}},
-		"spaces":   &Star{&Apply{name: "space"}},
-		"space":    &Chars{[]rune(" \t\n\r")},
+		"ListOf": &Alt{[]PExpr{
+			&Apply{"NonemptyListOf", []PExpr{&Param{0}, &Param{1}}},
+			&Apply{"EmptyListOf", []PExpr{&Param{0}, &Param{1}}},
+		}},
+		"NonemptyListOf": &Seq{[]PExpr{&Param{0}, &Star{&Seq{[]PExpr{&Param{1}, &Param{0}}}}}},
+		"EmptyListOf":    &Seq{},
+		"listOf": &Alt{[]PExpr{
+			&Apply{"nonemptyListOf", []PExpr{&Param{0}, &Param{1}}},
+			&Apply{name: "emptyListOf", args: []PExpr{&Param{0}, &Param{1}}},
+		}},
+		"nonemptyListOf": &Seq{[]PExpr{&Param{0}, &Star{&Seq{[]PExpr{&Param{1}, &Param{0}}}}}},
+		"emptyListOf":    &Seq{},
+		"end":            &Not{&Any{}},
+		"spaces":         &Star{&Apply{name: "space"}},
+		"space":          &Chars{[]rune(" \t\n\r")},
 	},
 }
