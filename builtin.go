@@ -530,7 +530,7 @@ var OhmGrammar Grammar = Grammar{
 			&Maybe{&Apply{name: "SuperGrammar"}},
 			&Char{'{'},
 			&Star{&Apply{name: "Rule"}},
-			&Char{'"'},
+			&Char{'}'},
 		}},
 		"SuperGrammar": &Seq{[]PExpr{
 			&Seq{[]PExpr{&Char{'<'}, &Char{':'}}},
@@ -594,7 +594,7 @@ var OhmGrammar Grammar = Grammar{
 			&Char{'>'},
 		}},
 		"Alt": &Apply{name: "NonemptyListOf", args: []PExpr{&Apply{name: "Seq"}, &Char{'|'}}},
-		"Seq": &Apply{name: "Star", args: []PExpr{&Apply{name: "Iter"}}},
+		"Seq": &Star{&Apply{name: "Iter", args: []PExpr{&Apply{name: "Iter"}}}},
 		"Iter": &Alt{[]PExpr{
 			&Apply{name: "Iter_star"},
 			&Apply{name: "Iter_plus"},
@@ -672,8 +672,8 @@ var OhmGrammar Grammar = Grammar{
 		"caseName": &Seq{[]PExpr{
 			&Seq{[]PExpr{&Char{'-'}, &Char{'-'}}},
 			&Star{&Seq{[]PExpr{&Not{&Char{'\n'}}, &Apply{name: "space"}}}},
-			&Star{&Apply{name: "name"}},
-			&Star{&Seq{[]PExpr{&Char{'\n'}, &Apply{name: "space"}}}},
+			&Apply{name: "name"},
+			&Star{&Seq{[]PExpr{&Not{&Char{'\n'}}, &Apply{name: "space"}}}},
 			&Alt{[]PExpr{&Char{'\n'}, &Lookahead{&Char{'}'}}}},
 		}},
 		"name": &Seq{[]PExpr{
