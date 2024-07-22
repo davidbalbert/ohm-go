@@ -38,11 +38,22 @@ type call struct {
 	lexical bool
 }
 
+type memoKey struct {
+	rule string
+	pos  int
+}
+
+type memoVal struct {
+	res bool
+	end int
+}
+
 type MatchState struct {
 	g     *Grammar
 	input string
 	pos   int
 	stack []call
+	memo  map[memoKey]memoVal
 }
 
 var spaces Apply = Apply{name: "spaces"}
@@ -51,7 +62,10 @@ func (m *MatchState) eval(expr PExpr) (bool, error) {
 	pos := m.pos
 
 	if !m.stack[len(m.stack)-1].lexical && expr != &spaces {
-		m.eval(&spaces)
+		_, err := m.eval(&spaces)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	res, err := expr.Eval(m)
@@ -64,6 +78,28 @@ func (m *MatchState) eval(expr PExpr) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func (m *MatchState) memoized(rule string, pos int) (res bool, end int, ok bool) {
+	if m.memo == nil {
+		return false, 0, false
+	}
+
+	key := memoKey{rule, pos}
+	val, ok := m.memo[key]
+	if !ok {
+		return false, 0, false
+	}
+	return val.res, val.end, true
+}
+
+func (m *MatchState) memoize(rule string, start int, res bool, end int) {
+	if m.memo == nil {
+		m.memo = make(map[memoKey]memoVal)
+	}
+
+	key := memoKey{rule, start}
+	m.memo[key] = memoVal{res, end}
 }
 
 type PExpr interface {
@@ -312,6 +348,12 @@ type Apply struct {
 }
 
 func (a *Apply) Eval(m *MatchState) (bool, error) {
+	res, end, ok := m.memoized(a.name, m.pos)
+	if ok {
+		m.pos = end
+		return res, nil
+	}
+
 	islex, err := a.isLexical()
 	if err != nil {
 		return false, err
@@ -329,11 +371,22 @@ func (a *Apply) Eval(m *MatchState) (bool, error) {
 		m.stack = m.stack[:len(m.stack)-1]
 	}()
 
+	start := m.pos
+
 	g := m.g
 	for g != nil {
 		expr := g.rules[a.name]
 		if expr != nil {
-			return m.eval(expr)
+			res, err := m.eval(expr)
+			if err != nil {
+				return false, err
+			}
+			if res {
+				m.memoize(a.name, start, true, m.pos)
+			} else {
+				m.memoize(a.name, start, false, start)
+			}
+			return res, nil
 		}
 
 		g = g.super
