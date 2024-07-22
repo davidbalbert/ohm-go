@@ -383,10 +383,10 @@ func (a *Apply) Eval(m *MatchState) (bool, error) {
 			}
 			if res {
 				m.memoize(a.name, start, true, m.pos)
-			} else {
-				m.memoize(a.name, start, false, start)
+				return true, nil
 			}
-			return res, nil
+			m.memoize(a.name, start, false, start)
+			return false, nil
 		}
 
 		g = g.super
